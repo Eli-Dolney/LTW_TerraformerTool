@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "ltwterraformer:item/survival_builder_wand"
+  }
+}
