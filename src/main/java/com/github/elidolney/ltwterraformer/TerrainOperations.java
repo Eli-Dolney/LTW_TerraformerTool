@@ -260,6 +260,11 @@ public final class TerrainOperations {
         changes.add(new UndoManager.Change(pos.immutable(), old));
     }
 
+    static void setCopiedBlock(ServerLevel level, ServerPlayer player, BlockPos pos, BlockState replacement,
+                               List<UndoManager.Change> changes) {
+        set(level, player, pos, replacement, changes, replacement.isAir(), true);
+    }
+
     private static boolean room(List<UndoManager.Change> changes) {
         return changes.size() < MAX_CHANGES;
     }

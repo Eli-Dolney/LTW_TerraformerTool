@@ -55,7 +55,21 @@ public final class ModCommands {
                                     }
                                     return builder.buildFuture();
                                 })
-                                .executes(ModCommands::setRestriction))));
+                                .executes(ModCommands::setRestriction)))
+                .then(Commands.literal("structure")
+                        .then(Commands.literal("save")
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .executes(ModCommands::saveStructure)))
+                        .then(Commands.literal("load")
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .suggests((context, builder) -> suggestStructures(context.getSource(), builder).buildFuture())
+                                        .executes(ModCommands::loadStructure)))
+                        .then(Commands.literal("delete")
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .suggests((context, builder) -> suggestStructures(context.getSource(), builder).buildFuture())
+                                        .executes(ModCommands::deleteStructure)))
+                        .then(Commands.literal("clear").executes(context -> clearStructureSelection(context.getSource())))
+                        .then(Commands.literal("list").executes(context -> listStructures(context.getSource())))));
     }
 
     private static int undo(CommandSourceStack source) {
@@ -91,6 +105,12 @@ public final class ModCommands {
             WandRestriction next = ToolData.restriction(stack).next();
             ToolData.setRestriction(stack, next);
             source.sendSuccess(() -> Component.translatable("message.ltwterraformer.restriction", next.displayName()), false);
+            return 1;
+        }
+        if (stack.is(ModItems.STRUCTURE_EDITOR.get())) {
+            StructureEditorMode next = ToolData.editorMode(stack).next();
+            ToolData.setEditorMode(stack, next);
+            source.sendSuccess(() -> Component.translatable("message.ltwterraformer.structure_mode", next.displayName()), false);
             return 1;
         }
         source.sendFailure(Component.translatable("command.ltwterraformer.hold_tool"));
@@ -170,6 +190,77 @@ public final class ModCommands {
         return 1;
     }
 
+    private static int saveStructure(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = player(context.getSource());
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        return StructureLibrary.savePreset(player, stack, StringArgumentType.getString(context, "name")) ? 1 : 0;
+    }
+
+    private static int loadStructure(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = player(context.getSource());
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        return StructureLibrary.loadPreset(player, stack, StringArgumentType.getString(context, "name")) ? 1 : 0;
+    }
+
+    private static int deleteStructure(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = player(context.getSource());
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        return StructureLibrary.deletePreset(player, stack, StringArgumentType.getString(context, "name")) ? 1 : 0;
+    }
+
+    private static int clearStructureSelection(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        ToolData.clearSelection(stack);
+        ToolData.setEditorMode(stack, StructureEditorMode.SELECT);
+        source.sendSuccess(() -> Component.translatable("message.ltwterraformer.structure_selection_cleared"), false);
+        return 1;
+    }
+
+    private static int listStructures(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        java.util.List<String> names = ToolData.structureNames(stack);
+        source.sendSuccess(() -> names.isEmpty()
+                ? Component.translatable("message.ltwterraformer.structure_library_empty")
+                : Component.translatable("message.ltwterraformer.structure_library_list", String.join(", ", names)), false);
+        return names.size();
+    }
+
+    private static com.mojang.brigadier.suggestion.SuggestionsBuilder suggestStructures(
+            CommandSourceStack source, com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (Exception exception) {
+            return builder;
+        }
+        for (String name : ToolData.structureNames(structureEditor(player))) {
+            builder.suggest(name);
+        }
+        return builder;
+    }
+
     private static ServerPlayer player(CommandSourceStack source) {
         try {
             return source.getPlayerOrException();
@@ -181,11 +272,13 @@ public final class ModCommands {
 
     private static ItemStack heldTool(ServerPlayer player) {
         ItemStack main = player.getMainHandItem();
-        if (main.is(ModItems.CREATIVE_TERRAFORMER.get()) || main.is(ModItems.SURVIVAL_BUILDER_WAND.get())) {
+        if (main.is(ModItems.CREATIVE_TERRAFORMER.get()) || main.is(ModItems.SURVIVAL_BUILDER_WAND.get())
+                || main.is(ModItems.STRUCTURE_EDITOR.get())) {
             return main;
         }
         ItemStack offhand = player.getOffhandItem();
         return offhand.is(ModItems.CREATIVE_TERRAFORMER.get()) || offhand.is(ModItems.SURVIVAL_BUILDER_WAND.get())
+                || offhand.is(ModItems.STRUCTURE_EDITOR.get())
                 ? offhand : ItemStack.EMPTY;
     }
 
@@ -197,6 +290,11 @@ public final class ModCommands {
     private static ItemStack wand(ServerPlayer player) {
         ItemStack stack = heldTool(player);
         return stack.is(ModItems.SURVIVAL_BUILDER_WAND.get()) ? stack : ItemStack.EMPTY;
+    }
+
+    private static ItemStack structureEditor(ServerPlayer player) {
+        ItemStack stack = heldTool(player);
+        return stack.is(ModItems.STRUCTURE_EDITOR.get()) ? stack : ItemStack.EMPTY;
     }
 
     private static TerraformMode findMode(String id) {

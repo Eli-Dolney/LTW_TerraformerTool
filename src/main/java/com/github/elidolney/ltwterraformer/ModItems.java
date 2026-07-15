@@ -20,6 +20,14 @@ public final class ModItems {
                     .attributes(creativeReach()))
     );
 
+    public static final DeferredItem<Item> STRUCTURE_EDITOR = ITEMS.register(
+            "structure_editor",
+            () -> new StructureEditorItem(new Item.Properties()
+                    .stacksTo(1)
+                    .fireResistant()
+                    .attributes(creativeReach()))
+    );
+
     public static final DeferredItem<Item> SURVIVAL_BUILDER_WAND = ITEMS.register(
             "survival_builder_wand",
             () -> new SurvivalBuilderWandItem(new Item.Properties().stacksTo(1).durability(4096))
