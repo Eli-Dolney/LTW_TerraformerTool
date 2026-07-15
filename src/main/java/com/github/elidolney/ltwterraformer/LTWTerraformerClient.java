@@ -72,6 +72,12 @@ public final class LTWTerraformerClient {
             if (CYCLE_MODE.consumeClick()) {
                 minecraft.player.connection.sendCommand("ltwterraformer cycle");
             }
+            if (RADIUS_DOWN.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer structure adjust_height -1");
+            }
+            if (RADIUS_UP.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer structure adjust_height 1");
+            }
             if (UNDO.consumeClick()) {
                 minecraft.player.connection.sendCommand("ltwterraformer undo");
             }

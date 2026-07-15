@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -127,8 +129,7 @@ public final class StructureLibrary {
         for (BlockEntry entry : structure.blocks()) {
             BlockPos target = origin.offset(entry.relative());
             BlockState old = level.getBlockState(target);
-            if (!level.getWorldBorder().isWithinBounds(target) || !level.mayInteract(player, target)
-                    || level.getBlockEntity(target) != null || old.getDestroySpeed(level, target) < 0) {
+            if (!level.getWorldBorder().isWithinBounds(target) || !level.mayInteract(player, target) || old.getDestroySpeed(level, target) < 0) {
                 player.displayClientMessage(Component.translatable("message.ltwterraformer.structure_blocked")
                         .withStyle(ChatFormatting.RED), true);
                 return 0;
@@ -136,9 +137,33 @@ public final class StructureLibrary {
         }
 
         List<UndoManager.Change> changes = new ArrayList<>();
-        for (BlockEntry entry : structure.blocks()) {
-            TerrainOperations.setCopiedBlock(
-                    level, player, origin.offset(entry.relative()), entry.state(), changes);
+        List<BlockEntry> placementOrder = new ArrayList<>(structure.blocks());
+        placementOrder.sort(Comparator.comparingInt(entry -> placementPriority(level, origin.offset(entry.relative()), entry)));
+        List<BlockEntry> placed = new ArrayList<>();
+        for (BlockEntry entry : placementOrder) {
+            if (TerrainOperations.setCopiedBlock(level, player, origin.offset(entry.relative()), entry.state(),
+                    changes, entry.blockEntityData() != null)) {
+                placed.add(entry);
+            }
+        }
+        for (BlockEntry entry : placed) {
+            if (entry.blockEntityData() == null) {
+                continue;
+            }
+            BlockPos target = origin.offset(entry.relative());
+            BlockEntity blockEntity = level.getBlockEntity(target);
+            if (blockEntity != null) {
+                CompoundTag data = entry.blockEntityData().copy();
+                data.putInt("x", target.getX());
+                data.putInt("y", target.getY());
+                data.putInt("z", target.getZ());
+                blockEntity.loadWithComponents(data, level.registryAccess());
+                blockEntity.setChanged();
+            }
+        }
+        for (int i = placed.size() - 1; i >= 0; i--) {
+            BlockEntry entry = placed.get(i);
+            level.blockUpdated(origin.offset(entry.relative()), entry.state().getBlock());
         }
         if (!changes.isEmpty()) {
             UndoManager.remember(player, level, changes);
@@ -196,12 +221,10 @@ public final class StructureLibrary {
 
         List<BlockEntry> blocks = new ArrayList<>((int) volume);
         for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
-            if (level.getBlockEntity(pos) != null) {
-                player.displayClientMessage(Component.translatable("message.ltwterraformer.structure_block_entities")
-                        .withStyle(ChatFormatting.RED), true);
-                return null;
-            }
-            blocks.add(new BlockEntry(pos.subtract(min).immutable(), level.getBlockState(pos)));
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            CompoundTag blockEntityData = blockEntity == null
+                    ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+            blocks.add(new BlockEntry(pos.subtract(min).immutable(), level.getBlockState(pos), blockEntityData));
         }
         return new StoredStructure(size, List.copyOf(blocks));
     }
@@ -218,6 +241,9 @@ public final class StructureLibrary {
             entry.putInt("y", block.relative().getY());
             entry.putInt("z", block.relative().getZ());
             entry.put("state", NbtUtils.writeBlockState(block.state()));
+            if (block.blockEntityData() != null) {
+                entry.put("block_entity", block.blockEntityData().copy());
+            }
             blocks.add(entry);
         }
         root.put("blocks", blocks);
@@ -263,7 +289,9 @@ public final class StructureLibrary {
                 }
                 BlockState state = NbtUtils.readBlockState(
                         player.serverLevel().holderLookup(Registries.BLOCK), entry.getCompound("state"));
-                blocks.add(new BlockEntry(relative, state));
+                CompoundTag blockEntityData = entry.contains("block_entity", Tag.TAG_COMPOUND)
+                        ? entry.getCompound("block_entity").copy() : null;
+                blocks.add(new BlockEntry(relative, state, blockEntityData));
             }
             return new StoredStructure(size, List.copyOf(blocks));
         } catch (IOException | RuntimeException exception) {
@@ -282,6 +310,14 @@ public final class StructureLibrary {
         return root.resolve(safeName + ".nbt").normalize();
     }
 
+    private static int placementPriority(ServerLevel level, BlockPos target, BlockEntry entry) {
+        if (entry.blockEntityData() != null) {
+            return 1;
+        }
+        return !entry.state().isSolidRender(level, target)
+                && !entry.state().isCollisionShapeFullBlock(level, target) ? 2 : 0;
+    }
+
     private static BlockPos min(BlockPos first, BlockPos second) {
         return new BlockPos(
                 Math.min(first.getX(), second.getX()),
@@ -296,7 +332,7 @@ public final class StructureLibrary {
                 Math.max(first.getZ(), second.getZ()));
     }
 
-    private record BlockEntry(BlockPos relative, BlockState state) {
+    private record BlockEntry(BlockPos relative, BlockState state, CompoundTag blockEntityData) {
     }
 
     private record StoredStructure(Vec3i size, List<BlockEntry> blocks) {

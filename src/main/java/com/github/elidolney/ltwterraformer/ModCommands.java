@@ -68,6 +68,9 @@ public final class ModCommands {
                                 .then(Commands.argument("name", StringArgumentType.word())
                                         .suggests((context, builder) -> suggestStructures(context.getSource(), builder).buildFuture())
                                         .executes(ModCommands::deleteStructure)))
+                        .then(Commands.literal("adjust_height")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(-1, 1))
+                                        .executes(ModCommands::adjustStructureHeight)))
                         .then(Commands.literal("clear").executes(context -> clearStructureSelection(context.getSource())))
                         .then(Commands.literal("list").executes(context -> listStructures(context.getSource())))));
     }
@@ -218,6 +221,30 @@ public final class ModCommands {
             return 0;
         }
         return StructureLibrary.deletePreset(player, stack, StringArgumentType.getString(context, "name")) ? 1 : 0;
+    }
+
+    private static int adjustStructureHeight(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = player(context.getSource());
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        int amount = IntegerArgumentType.getInteger(context, "amount");
+        var ceiling = ToolData.adjustSelectionCeiling(stack, amount);
+        if (ceiling.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("message.ltwterraformer.structure_select_two"));
+            return 0;
+        }
+        int height = Math.abs(ToolData.cornerOne(stack).orElseThrow().getY()
+                - ToolData.cornerTwo(stack).orElseThrow().getY()) + 1;
+        if (!StructureLibrary.captureClipboard(player, stack)) {
+            ToolData.adjustSelectionCeiling(stack, -amount);
+            return 0;
+        }
+        context.getSource().sendSuccess(() -> Component.translatable(
+                "message.ltwterraformer.structure_ceiling", ceiling.getAsInt(), height), false);
+        return 1;
     }
 
     private static int clearStructureSelection(CommandSourceStack source) {

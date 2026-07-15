@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 public final class ToolData {
     private static final String MODE = "TerraformMode";
@@ -106,6 +107,28 @@ public final class ToolData {
         CompoundTag tag = tag(stack);
         tag.putLong(CORNER_TWO, pos.asLong());
         write(stack, tag);
+    }
+
+    public static OptionalInt adjustSelectionCeiling(ItemStack stack, int amount) {
+        Optional<BlockPos> first = cornerOne(stack);
+        Optional<BlockPos> second = cornerTwo(stack);
+        if (first.isEmpty() || second.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        BlockPos one = first.get();
+        BlockPos two = second.get();
+        int floorY = Math.min(one.getY(), two.getY());
+        boolean adjustFirst = one.getY() > two.getY();
+        BlockPos ceiling = adjustFirst ? one : two;
+        int nextY = Math.max(floorY, ceiling.getY() + amount);
+        CompoundTag tag = tag(stack);
+        if (adjustFirst) {
+            tag.putLong(CORNER_ONE, new BlockPos(one.getX(), nextY, one.getZ()).asLong());
+        } else {
+            tag.putLong(CORNER_TWO, new BlockPos(two.getX(), nextY, two.getZ()).asLong());
+        }
+        write(stack, tag);
+        return OptionalInt.of(nextY);
     }
 
     public static String selectionDimension(ItemStack stack) {

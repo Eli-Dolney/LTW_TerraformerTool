@@ -18,7 +18,7 @@ All keys can be changed under Minecraft's **Controls** menu.
 | --- | --- |
 | `V` | Cycle the Terraformer mode or Builder Wand pattern |
 | `B` | Cycle the Creative Terraformer's shape |
-| `[` / `]` | Decrease/increase creative radius (1-16) |
+| `[` / `]` | Decrease/increase creative radius, or lower/raise the Structure Editor ceiling |
 | `G` | Open the Structure Editor's named preset library |
 | `Z` | Undo the most recent operation |
 | Right-click | Apply the held tool's operation |
@@ -30,12 +30,13 @@ Sneak-right-click cycles Terraformer modes, Builder Wand patterns, or the Struct
 The creative-only **LTW Structure Editor** makes builds reusable without leaving the world:
 
 1. In **Select** mode, right-click two opposite corners. The cyan 3D outline previews the selected cube and the second click copies it.
-2. Sneak-right-click to enter **Paste** mode. Aim at a block face to preview the destination, then right-click to paste.
-3. Press `G` to save the current selection with names such as `tree`, `path`, `house_1`, or `house_2`.
-4. Use the library's Load and Delete buttons to manage presets. Loading automatically selects Paste mode.
-5. Press `Z` after a paste to undo it.
+2. Press `[` or `]` while the selection is visible to lower or raise its ceiling one block at a time. This makes sloped roofs easy to include without finding a block at the exact peak height.
+3. Sneak-right-click to enter **Paste** mode. Aim at a block face to preview the destination, then right-click to paste.
+4. Press `G` to save the current selection with names such as `tree`, `path`, `house_1`, or `house_2`.
+5. Use the library's Load and Delete buttons to manage presets. Loading automatically selects Paste mode.
+6. Press `Z` after a paste to undo it.
 
-Presets are saved per player inside the world at `ltwterraformer/structures/<player-uuid>/`. A selection can contain at most 65,536 blocks. Air is preserved so copied builds keep their exact shape. Block entities such as chests are rejected for now so paste and undo remain reliable.
+Presets are saved per player inside the world at `ltwterraformer/structures/<player-uuid>/`. A selection can contain at most 65,536 blocks. Air and exact block states are preserved. Solid supports are placed first so torches, doors, beds, and other attached or multi-block pieces remain intact. Block-entity data is copied for chests, furnaces, signs, banners, beds, and modded block entities, including container inventories, and paste undo restores the previous data.
 
 ## Ultimate Creative Terraformer
 
@@ -71,6 +72,7 @@ Normal play does not require commands, but these are useful for testing and acce
 /ltwterraformer structure load <name>
 /ltwterraformer structure delete <name>
 /ltwterraformer structure list
+/ltwterraformer structure adjust_height <-1|1>
 /ltwterraformer structure clear
 ```
 
