@@ -260,6 +260,38 @@ public final class TerrainOperations {
         changes.add(new UndoManager.Change(pos.immutable(), old));
     }
 
+    static boolean setCopiedBlock(ServerLevel level, ServerPlayer player, BlockPos pos, BlockState replacement,
+                                  List<UndoManager.Change> changes, boolean force) {
+        if (!room(changes) || !level.getWorldBorder().isWithinBounds(pos) || !level.mayInteract(player, pos)) {
+            return false;
+        }
+        BlockState old = level.getBlockState(pos);
+        if (!force && old.equals(replacement) || old.getDestroySpeed(level, pos) < 0) {
+            return false;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity oldBlockEntity = level.getBlockEntity(pos);
+        net.minecraft.nbt.CompoundTag oldBlockEntityData = oldBlockEntity == null
+                ? null : oldBlockEntity.saveWithFullMetadata(level.registryAccess());
+        boolean clearing = replacement.isAir();
+        boolean removesSolid = clearing || !old.isAir() && !old.canBeReplaced();
+        if (removesSolid && CommonHooks.fireBlockBreak(
+                level, player.gameMode.getGameModeForPlayer(), player, pos, old).isCanceled()) {
+            return false;
+        }
+        BlockSnapshot snapshot = BlockSnapshot.create(level.dimension(), level, pos, 3);
+        net.minecraft.world.Clearable.tryClear(oldBlockEntity);
+        boolean changedState = level.setBlock(pos, replacement, 2);
+        if (!changedState && !force) {
+            return false;
+        }
+        if (!clearing && EventHooks.onBlockPlace(player, snapshot, Direction.UP)) {
+            snapshot.restore(3);
+            return false;
+        }
+        changes.add(new UndoManager.Change(pos.immutable(), old, oldBlockEntityData));
+        return true;
+    }
+
     private static boolean room(List<UndoManager.Change> changes) {
         return changes.size() < MAX_CHANGES;
     }

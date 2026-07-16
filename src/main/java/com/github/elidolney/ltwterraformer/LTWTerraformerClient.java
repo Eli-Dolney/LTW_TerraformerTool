@@ -66,6 +66,23 @@ public final class LTWTerraformerClient {
             return;
         }
         ItemStack held = heldTool(minecraft);
+        boolean structureEditorHeld = minecraft.player.getMainHandItem().is(ModItems.STRUCTURE_EDITOR.get())
+                || minecraft.player.getOffhandItem().is(ModItems.STRUCTURE_EDITOR.get());
+        if (structureEditorHeld) {
+            if (CYCLE_MODE.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer cycle");
+            }
+            if (RADIUS_DOWN.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer structure adjust_height -1");
+            }
+            if (RADIUS_UP.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer structure adjust_height 1");
+            }
+            if (UNDO.consumeClick()) {
+                minecraft.player.connection.sendCommand("ltwterraformer undo");
+            }
+            return;
+        }
         if (held.isEmpty()) {
             return;
         }

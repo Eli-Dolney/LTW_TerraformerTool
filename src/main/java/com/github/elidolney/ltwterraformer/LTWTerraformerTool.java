@@ -24,6 +24,7 @@ public final class LTWTerraformerTool {
         if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(ModItems.SURVIVAL_BUILDER_WAND);
             event.accept(ModItems.CREATIVE_TERRAFORMER);
+            event.accept(ModItems.STRUCTURE_EDITOR);
         }
     }
 }
