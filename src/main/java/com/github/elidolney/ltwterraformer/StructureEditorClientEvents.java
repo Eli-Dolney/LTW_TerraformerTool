@@ -85,9 +85,25 @@ public final class StructureEditorClientEvents {
                 min = hit.getBlockPos();
                 max = min;
             } else {
-                BlockPos second = ToolData.cornerTwo(stack).orElse(hit.getBlockPos());
-                min = min(first.get(), second);
-                max = max(first.get(), second);
+                var second = ToolData.cornerTwo(stack);
+                var footprint = ToolData.footprintCorner(stack);
+                if (second.isPresent()) {
+                    min = min(first.get(), second.get());
+                    max = max(first.get(), second.get());
+                } else if (footprint.isEmpty()) {
+                    min = min(first.get(), hit.getBlockPos());
+                    max = max(first.get(), hit.getBlockPos());
+                } else {
+                    BlockPos footprintPos = footprint.get();
+                    int floorY = Math.min(hit.getBlockPos().getY(),
+                            Math.min(first.get().getY(), footprintPos.getY()));
+                    int ceilingY = Math.max(hit.getBlockPos().getY(),
+                            Math.max(first.get().getY(), footprintPos.getY()));
+                    min = new BlockPos(Math.min(first.get().getX(), footprintPos.getX()), floorY,
+                            Math.min(first.get().getZ(), footprintPos.getZ()));
+                    max = new BlockPos(Math.max(first.get().getX(), footprintPos.getX()), ceilingY,
+                            Math.max(first.get().getZ(), footprintPos.getZ()));
+                }
             }
         }
 
@@ -113,8 +129,20 @@ public final class StructureEditorClientEvents {
                 ToolData.editorMode(stack).displayName(), active.isEmpty()
                         ? Component.translatable("screen.ltwterraformer.none")
                         : StructureLibrary.displayName(active));
-        Component hint = Component.translatable("hud.ltwterraformer.structure_editor_hint",
-                LIBRARY.getTranslatedKeyMessage());
+        Component hint;
+        if (ToolData.editorMode(stack) == StructureEditorMode.PASTE) {
+            hint = Component.translatable("hud.ltwterraformer.structure_editor_paste",
+                    LIBRARY.getTranslatedKeyMessage());
+        } else if (ToolData.cornerTwo(stack).isPresent()) {
+            hint = Component.translatable("hud.ltwterraformer.structure_editor_ready",
+                    LIBRARY.getTranslatedKeyMessage());
+        } else if (ToolData.cornerOne(stack).isEmpty()) {
+            hint = Component.translatable("hud.ltwterraformer.structure_editor_point_one");
+        } else if (ToolData.footprintCorner(stack).isEmpty()) {
+            hint = Component.translatable("hud.ltwterraformer.structure_editor_point_two");
+        } else {
+            hint = Component.translatable("hud.ltwterraformer.structure_editor_point_three");
+        }
         GuiGraphics graphics = event.getGuiGraphics();
         Font font = minecraft.font;
         int width = Math.max(font.width(title), font.width(hint)) + 12;

@@ -61,9 +61,16 @@ public final class StructureEditorItem extends Item {
             return;
         }
 
-        ToolData.setCornerTwo(stack, clicked);
+        if (ToolData.footprintCorner(stack).isEmpty()) {
+            ToolData.setFootprintCorner(stack, clicked);
+            player.displayClientMessage(Component.translatable(
+                    "message.ltwterraformer.structure_footprint", clicked.getX(), clicked.getZ()), true);
+            return;
+        }
+
+        ToolData.finishThreePointSelection(stack, clicked.getY());
         player.displayClientMessage(Component.translatable(
-                "message.ltwterraformer.structure_corner_two", clicked.getX(), clicked.getY(), clicked.getZ()), true);
+                "message.ltwterraformer.structure_height", clicked.getY()), true);
         StructureLibrary.captureClipboard(player, stack);
     }
 

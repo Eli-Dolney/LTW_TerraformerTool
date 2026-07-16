@@ -41,7 +41,12 @@ public final class StructureEditorGameTests {
         level.setBlock(first, Blocks.OAK_LOG.defaultBlockState(), 3);
         level.setBlock(second, Blocks.OAK_LEAVES.defaultBlockState(), 3);
         ToolData.setCornerOne(editor, first, level.dimension().location().toString());
-        ToolData.setCornerTwo(editor, second);
+        ToolData.setFootprintCorner(editor, second);
+        helper.assertTrue(ToolData.footprintCorner(editor).orElseThrow().equals(second),
+                "Second point did not set the footprint");
+        helper.assertTrue(ToolData.finishThreePointSelection(editor, first.getY()),
+                "Third point did not finish the selection");
+        helper.assertTrue(ToolData.cornerTwo(editor).isPresent(), "Three-point selection did not create a cuboid");
         helper.assertTrue(ToolData.adjustSelectionCeiling(editor, 3).orElseThrow() == first.getY() + 3,
                 "Selection ceiling did not rise three blocks");
         helper.assertTrue(ToolData.cornerTwo(editor).orElseThrow().getY() == first.getY() + 3,

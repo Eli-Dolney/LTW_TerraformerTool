@@ -29,12 +29,14 @@ Sneak-right-click cycles Terraformer modes, Builder Wand patterns, or the Struct
 
 The creative-only **LTW Structure Editor** makes builds reusable without leaving the world:
 
-1. In **Select** mode, right-click two opposite corners. The cyan 3D outline previews the selected cube and the second click copies it.
-2. Press `[` or `]` while the selection is visible to lower or raise its ceiling one block at a time. This makes sloped roofs easy to include without finding a block at the exact peak height.
-3. Sneak-right-click to enter **Paste** mode. Aim at a block face to preview the destination, then right-click to paste.
-4. Press `G` to save the current selection with names such as `tree`, `path`, `house_1`, or `house_2`.
-5. Use the library's Load and Delete buttons to manage presets. Loading automatically selects Paste mode.
-6. Press `Z` after a paste to undo it.
+1. In **Select** mode, right-click the first starting corner.
+2. Right-click the opposite corner of the footprint. This sets only the selection's length and width.
+3. Right-click any block at the height you want. Only this third point's Y level is used, so clicking a roof peak will not move the footprint. The structure is copied after this click.
+4. The HUD always shows which of the three points comes next. Afterward, `[` and `]` remain available for one-block ceiling adjustments.
+5. Sneak-right-click or press `V` to enter **Paste** mode. Aim at a block face to preview the destination, then right-click to paste.
+6. Press `G` to save the current selection with names such as `tree`, `path`, `house_1`, or `house_2`.
+7. Use the library's Load and Delete buttons to manage presets. Loading automatically selects Paste mode.
+8. Press `Z` after a paste to undo it.
 
 Presets are saved per player inside the world at `ltwterraformer/structures/<player-uuid>/`. A selection can contain at most 65,536 blocks. Air and exact block states are preserved. Solid supports are placed first so torches, doors, beds, and other attached or multi-block pieces remain intact. Block-entity data is copied for chests, furnaces, signs, banners, beds, and modded block entities, including container inventories, and paste undo restores the previous data.
 

@@ -24,6 +24,7 @@ public final class ToolData {
     private static final String EDITOR_MODE = "StructureEditorMode";
     private static final String CORNER_ONE = "StructureCornerOne";
     private static final String CORNER_TWO = "StructureCornerTwo";
+    private static final String FOOTPRINT_CORNER = "StructureFootprintCorner";
     private static final String SELECTION_DIMENSION = "StructureSelectionDimension";
     private static final String ACTIVE_STRUCTURE = "ActiveStructure";
     private static final String ACTIVE_SIZE_X = "ActiveStructureSizeX";
@@ -95,17 +96,50 @@ public final class ToolData {
         return tag.contains(CORNER_TWO, Tag.TAG_LONG) ? Optional.of(BlockPos.of(tag.getLong(CORNER_TWO))) : Optional.empty();
     }
 
+    public static Optional<BlockPos> footprintCorner(ItemStack stack) {
+        CompoundTag tag = tag(stack);
+        return tag.contains(FOOTPRINT_CORNER, Tag.TAG_LONG)
+                ? Optional.of(BlockPos.of(tag.getLong(FOOTPRINT_CORNER))) : Optional.empty();
+    }
+
     public static void setCornerOne(ItemStack stack, BlockPos pos, String dimension) {
         CompoundTag tag = tag(stack);
         tag.putLong(CORNER_ONE, pos.asLong());
         tag.remove(CORNER_TWO);
+        tag.remove(FOOTPRINT_CORNER);
         tag.putString(SELECTION_DIMENSION, dimension);
         write(stack, tag);
+    }
+
+    public static void setFootprintCorner(ItemStack stack, BlockPos pos) {
+        CompoundTag tag = tag(stack);
+        tag.putLong(FOOTPRINT_CORNER, pos.asLong());
+        tag.remove(CORNER_TWO);
+        write(stack, tag);
+    }
+
+    public static boolean finishThreePointSelection(ItemStack stack, int heightY) {
+        Optional<BlockPos> first = cornerOne(stack);
+        Optional<BlockPos> footprint = footprintCorner(stack);
+        if (first.isEmpty() || footprint.isEmpty()) {
+            return false;
+        }
+        BlockPos one = first.get();
+        BlockPos two = footprint.get();
+        int floorY = Math.min(heightY, Math.min(one.getY(), two.getY()));
+        int ceilingY = Math.max(heightY, Math.max(one.getY(), two.getY()));
+        CompoundTag tag = tag(stack);
+        tag.putLong(CORNER_ONE, new BlockPos(one.getX(), floorY, one.getZ()).asLong());
+        tag.putLong(CORNER_TWO, new BlockPos(two.getX(), ceilingY, two.getZ()).asLong());
+        tag.remove(FOOTPRINT_CORNER);
+        write(stack, tag);
+        return true;
     }
 
     public static void setCornerTwo(ItemStack stack, BlockPos pos) {
         CompoundTag tag = tag(stack);
         tag.putLong(CORNER_TWO, pos.asLong());
+        tag.remove(FOOTPRINT_CORNER);
         write(stack, tag);
     }
 
@@ -139,6 +173,7 @@ public final class ToolData {
         CompoundTag tag = tag(stack);
         tag.remove(CORNER_ONE);
         tag.remove(CORNER_TWO);
+        tag.remove(FOOTPRINT_CORNER);
         tag.remove(SELECTION_DIMENSION);
         write(stack, tag);
     }
