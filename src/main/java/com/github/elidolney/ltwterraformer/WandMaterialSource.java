@@ -40,7 +40,7 @@ final class WandMaterialSource {
 
     int availableCount(Player player) {
         if (player.getAbilities().instabuild) {
-            return WandPlacementPlanner.MAX_HOLE_FILL_BLOCKS;
+            return WandPlacementPlanner.MAX_BOX_BLOCKS;
         }
         int count = 0;
         if (offhandSelected) {
@@ -54,7 +54,7 @@ final class WandMaterialSource {
                 count += stack.getCount();
             }
         }
-        return Math.min(count, WandPlacementPlanner.MAX_HOLE_FILL_BLOCKS);
+        return Math.min(count, WandPlacementPlanner.MAX_BOX_BLOCKS);
     }
 
     ItemStack currentStack(Player player) {

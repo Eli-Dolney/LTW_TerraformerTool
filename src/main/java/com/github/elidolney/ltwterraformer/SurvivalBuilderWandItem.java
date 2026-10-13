@@ -27,6 +27,7 @@ import net.neoforged.neoforge.event.EventHooks;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public final class SurvivalBuilderWandItem extends Item {
     public SurvivalBuilderWandItem(Properties properties) {
@@ -62,9 +63,38 @@ public final class SurvivalBuilderWandItem extends Item {
         }
 
         WandRestriction restriction = ToolData.restriction(wand);
+        List<BlockPos> planned;
+        Direction placementFace;
+        if (restriction.twoPoint()) {
+            BlockPos point = context.getClickedPos().relative(context.getClickedFace());
+            String dimension = level.dimension().location().toString();
+            Optional<BlockPos> corner = ToolData.wandCorner(wand);
+            if (corner.isEmpty() || !dimension.equals(ToolData.wandCornerDimension(wand))) {
+                ToolData.setWandCorner(wand, point, dimension);
+                player.displayClientMessage(Component.translatable("message.ltwterraformer.wand_corner_one",
+                        point.getX(), point.getY(), point.getZ()), true);
+                return InteractionResult.SUCCESS;
+            }
+            BlockPos first = corner.get();
+            if (Math.abs(point.getX() - first.getX()) >= WandPlacementPlanner.MAX_BOX_SPAN
+                    || Math.abs(point.getY() - first.getY()) >= WandPlacementPlanner.MAX_BOX_SPAN
+                    || Math.abs(point.getZ() - first.getZ()) >= WandPlacementPlanner.MAX_BOX_SPAN) {
+                player.displayClientMessage(Component.translatable("message.ltwterraformer.wand_box_too_large",
+                        WandPlacementPlanner.MAX_BOX_SPAN).withStyle(ChatFormatting.RED), true);
+                return InteractionResult.FAIL;
+            }
+            planned = WandPlacementPlanner.planBox(level, first, point, ToolData.wandExtraHeight(wand),
+                    restriction == WandRestriction.WALLS);
+            placementFace = Direction.UP;
+            ToolData.clearWandCorner(wand);
+        } else {
+            planned = WandPlacementPlanner.plan(level, context.getClickedPos(), context.getClickedFace(),
+                    restriction, player.getDirection());
+            placementFace = restriction == WandRestriction.HOLE_FILL ? Direction.UP : context.getClickedFace();
+        }
         int remainingDurability = wand.getMaxDamage() - wand.getDamageValue();
         int placementLimit = Math.min(material.availableCount(serverPlayer), remainingDurability);
-        int placed = placePattern(level, serverPlayer, context, material, restriction, placementLimit);
+        int placed = placePattern(level, serverPlayer, context, material, planned, placementFace, placementLimit);
         if (placed > 0) {
             EquipmentSlot slot = context.getHand() == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
             wand.hurtAndBreak(placed, serverPlayer, slot);
@@ -97,14 +127,11 @@ public final class SurvivalBuilderWandItem extends Item {
     }
 
     private static int placePattern(ServerLevel level, ServerPlayer player, UseOnContext context,
-                                    WandMaterialSource material, WandRestriction restriction, int placementLimit) {
+                                    WandMaterialSource material, List<BlockPos> planned, Direction placementFace,
+                                    int placementLimit) {
         BlockPos origin = context.getClickedPos();
-        Direction clickedFace = context.getClickedFace();
-        List<BlockPos> planned = WandPlacementPlanner.plan(
-                level, origin, clickedFace, restriction, player.getDirection());
         List<UndoManager.Change> changes = new ArrayList<>();
 
-        Direction placementFace = restriction == WandRestriction.HOLE_FILL ? Direction.UP : clickedFace;
         for (BlockPos target : planned) {
             if (changes.size() >= placementLimit || !material.available(player)) {
                 break;

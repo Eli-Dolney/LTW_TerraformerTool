@@ -1,6 +1,7 @@
 package com.github.elidolney.ltwterraformer;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -15,6 +16,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
 import java.util.List;
+import java.util.Optional;
 
 public final class CreativeTerraformerItem extends Item {
     public static final double REMOTE_REACH = 256.0;
@@ -45,10 +47,27 @@ public final class CreativeTerraformerItem extends Item {
         }
 
         if (!context.getLevel().isClientSide()) {
-            int changed = TerrainOperations.apply(context, ToolData.mode(stack), ToolData.radius(stack));
-            Component message = changed == 0
-                    ? Component.translatable("message.ltwterraformer.no_changes").withStyle(ChatFormatting.YELLOW)
-                    : Component.translatable("message.ltwterraformer.changed", changed);
+            TerraformMode mode = ToolData.mode(stack);
+            boolean selecting = ToolData.shape(stack) == BrushShape.SELECTION;
+            if (selecting && selectCorner(player, stack, context)) {
+                return InteractionResult.SUCCESS;
+            }
+            if (mode.needsSelection() && !selecting) {
+                player.displayClientMessage(Component.translatable("message.ltwterraformer.needs_selection",
+                        mode.displayName()).withStyle(ChatFormatting.YELLOW), true);
+                return InteractionResult.FAIL;
+            }
+            int limit = TerrainOperations.changeLimit(stack);
+            int changed = TerrainOperations.apply(context, mode, ToolData.radius(stack));
+            Component message;
+            if (changed == 0) {
+                message = Component.translatable("message.ltwterraformer.no_changes").withStyle(ChatFormatting.YELLOW);
+            } else if (changed >= limit) {
+                message = Component.translatable("message.ltwterraformer.limit_reached", changed)
+                        .withStyle(ChatFormatting.GOLD);
+            } else {
+                message = Component.translatable("message.ltwterraformer.changed", changed);
+            }
             player.displayClientMessage(message, true);
         }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
@@ -79,6 +98,37 @@ public final class CreativeTerraformerItem extends Item {
                     .withStyle(ChatFormatting.YELLOW), true);
         }
         return InteractionResultHolder.pass(stack);
+    }
+
+    /**
+     * In Selection shape the first two clicks mark the corners of the work area. Returns true when the click was
+     * used to mark a corner, false once both corners exist and the click should run the current mode.
+     */
+    private static boolean selectCorner(Player player, ItemStack stack, UseOnContext context) {
+        BlockPos clicked = context.getClickedPos();
+        String dimension = context.getLevel().dimension().location().toString();
+        Optional<BlockPos> first = ToolData.areaOne(stack);
+        if (first.isEmpty() || !dimension.equals(ToolData.areaDimension(stack))) {
+            ToolData.setAreaOne(stack, clicked, dimension);
+            player.displayClientMessage(Component.translatable("message.ltwterraformer.area_corner_one",
+                    clicked.getX(), clicked.getY(), clicked.getZ()), true);
+            return true;
+        }
+        if (ToolData.areaTwo(stack).isPresent()) {
+            return false;
+        }
+        int sizeX = Math.abs(clicked.getX() - first.get().getX()) + 1;
+        int sizeZ = Math.abs(clicked.getZ() - first.get().getZ()) + 1;
+        if (sizeX > TerrainOperations.MAX_SELECTION_SPAN || sizeZ > TerrainOperations.MAX_SELECTION_SPAN) {
+            player.displayClientMessage(Component.translatable("message.ltwterraformer.area_too_large",
+                    sizeX, sizeZ, TerrainOperations.MAX_SELECTION_SPAN).withStyle(ChatFormatting.RED), true);
+            return true;
+        }
+        ToolData.setAreaTwo(stack, clicked);
+        int sizeY = Math.abs(clicked.getY() - first.get().getY()) + 1;
+        player.displayClientMessage(Component.translatable("message.ltwterraformer.area_corner_two",
+                sizeX, sizeY, sizeZ), true);
+        return true;
     }
 
     @Override
