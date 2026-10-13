@@ -177,7 +177,8 @@ public final class ModGameTests {
                 WandRestriction.ROW, Direction.NORTH);
         List<BlockPos> columnTargets = WandPlacementPlanner.plan(level, wallCenter, Direction.EAST,
                 WandRestriction.COLUMN, Direction.NORTH);
-        BlockPos projectionOrigin = helper.absolutePos(new BlockPos(7, 20, 6));
+        // Keep all 16 descending steps above neighboring GameTest barrier enclosures.
+        BlockPos projectionOrigin = helper.absolutePos(new BlockPos(7, 80, 6));
         level.setBlock(projectionOrigin, Blocks.COBBLESTONE.defaultBlockState(), 3);
         List<BlockPos> lineTargets = WandPlacementPlanner.plan(level, projectionOrigin, Direction.EAST,
                 WandRestriction.LINE, Direction.NORTH);

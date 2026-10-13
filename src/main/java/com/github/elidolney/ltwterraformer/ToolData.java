@@ -31,6 +31,20 @@ public final class ToolData {
     private static final String ACTIVE_SIZE_Y = "ActiveStructureSizeY";
     private static final String ACTIVE_SIZE_Z = "ActiveStructureSizeZ";
     private static final String STRUCTURE_NAMES = "StructureNames";
+    private static final String ACTIVE_MATERIALS = "ActiveStructureMaterials";
+    private static final String ACTIVE_BLOCK_COUNT = "ActiveStructureBlocks";
+    private static final String PASTE_ROTATION = "PasteRotation";
+    private static final String PASTE_SKIP_AIR = "PasteSkipAir";
+    private static final String AREA_ONE = "AreaCornerOne";
+    private static final String AREA_TWO = "AreaCornerTwo";
+    private static final String AREA_DIMENSION = "AreaDimension";
+    private static final String AREA_EXTRA_HEIGHT = "AreaExtraHeight";
+    private static final String WAND_CORNER = "WandBoxCorner";
+    private static final String WAND_DIMENSION = "WandBoxDimension";
+    private static final String WAND_EXTRA_HEIGHT = "WandBoxExtraHeight";
+
+    public static final int MAX_AREA_EXTRA_HEIGHT = 255;
+    public static final int MAX_WAND_EXTRA_HEIGHT = 63;
 
     private ToolData() {
     }
@@ -73,7 +87,92 @@ public final class ToolData {
     public static void setRestriction(ItemStack stack, WandRestriction restriction) {
         CompoundTag tag = tag(stack);
         tag.putString(RESTRICTION, restriction.id());
+        tag.remove(WAND_CORNER);
+        tag.remove(WAND_DIMENSION);
         write(stack, tag);
+    }
+
+    public static Optional<BlockPos> areaOne(ItemStack stack) {
+        return position(stack, AREA_ONE);
+    }
+
+    public static Optional<BlockPos> areaTwo(ItemStack stack) {
+        return position(stack, AREA_TWO);
+    }
+
+    public static String areaDimension(ItemStack stack) {
+        return tag(stack).getString(AREA_DIMENSION);
+    }
+
+    public static void setAreaOne(ItemStack stack, BlockPos pos, String dimension) {
+        CompoundTag tag = tag(stack);
+        tag.putLong(AREA_ONE, pos.asLong());
+        tag.remove(AREA_TWO);
+        tag.remove(AREA_EXTRA_HEIGHT);
+        tag.putString(AREA_DIMENSION, dimension);
+        write(stack, tag);
+    }
+
+    public static void setAreaTwo(ItemStack stack, BlockPos pos) {
+        CompoundTag tag = tag(stack);
+        tag.putLong(AREA_TWO, pos.asLong());
+        write(stack, tag);
+    }
+
+    public static int areaExtraHeight(ItemStack stack) {
+        return Math.clamp(tag(stack).getInt(AREA_EXTRA_HEIGHT), 0, MAX_AREA_EXTRA_HEIGHT);
+    }
+
+    public static void setAreaExtraHeight(ItemStack stack, int extraHeight) {
+        CompoundTag tag = tag(stack);
+        tag.putInt(AREA_EXTRA_HEIGHT, Math.clamp(extraHeight, 0, MAX_AREA_EXTRA_HEIGHT));
+        write(stack, tag);
+    }
+
+    public static void clearArea(ItemStack stack) {
+        CompoundTag tag = tag(stack);
+        tag.remove(AREA_ONE);
+        tag.remove(AREA_TWO);
+        tag.remove(AREA_DIMENSION);
+        tag.remove(AREA_EXTRA_HEIGHT);
+        write(stack, tag);
+    }
+
+    public static Optional<BlockPos> wandCorner(ItemStack stack) {
+        return position(stack, WAND_CORNER);
+    }
+
+    public static String wandCornerDimension(ItemStack stack) {
+        return tag(stack).getString(WAND_DIMENSION);
+    }
+
+    public static void setWandCorner(ItemStack stack, BlockPos pos, String dimension) {
+        CompoundTag tag = tag(stack);
+        tag.putLong(WAND_CORNER, pos.asLong());
+        tag.putString(WAND_DIMENSION, dimension);
+        write(stack, tag);
+    }
+
+    public static void clearWandCorner(ItemStack stack) {
+        CompoundTag tag = tag(stack);
+        tag.remove(WAND_CORNER);
+        tag.remove(WAND_DIMENSION);
+        write(stack, tag);
+    }
+
+    public static int wandExtraHeight(ItemStack stack) {
+        return Math.clamp(tag(stack).getInt(WAND_EXTRA_HEIGHT), 0, MAX_WAND_EXTRA_HEIGHT);
+    }
+
+    public static void setWandExtraHeight(ItemStack stack, int extraHeight) {
+        CompoundTag tag = tag(stack);
+        tag.putInt(WAND_EXTRA_HEIGHT, Math.clamp(extraHeight, 0, MAX_WAND_EXTRA_HEIGHT));
+        write(stack, tag);
+    }
+
+    private static Optional<BlockPos> position(ItemStack stack, String key) {
+        CompoundTag tag = tag(stack);
+        return tag.contains(key, Tag.TAG_LONG) ? Optional.of(BlockPos.of(tag.getLong(key))) : Optional.empty();
     }
 
     public static StructureEditorMode editorMode(ItemStack stack) {
@@ -205,7 +304,62 @@ public final class ToolData {
         tag.remove(ACTIVE_SIZE_X);
         tag.remove(ACTIVE_SIZE_Y);
         tag.remove(ACTIVE_SIZE_Z);
+        tag.remove(ACTIVE_MATERIALS);
+        tag.remove(ACTIVE_BLOCK_COUNT);
         write(stack, tag);
+    }
+
+    /** Material lines for the active blueprint, each formatted as {@code item_id=count}, most-used first. */
+    public static List<String> activeMaterials(ItemStack stack) {
+        ListTag list = tag(stack).getList(ACTIVE_MATERIALS, Tag.TAG_STRING);
+        List<String> lines = new ArrayList<>(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            lines.add(list.getString(i));
+        }
+        return List.copyOf(lines);
+    }
+
+    public static int activeBlockCount(ItemStack stack) {
+        return Math.max(0, tag(stack).getInt(ACTIVE_BLOCK_COUNT));
+    }
+
+    public static void setActiveMaterials(ItemStack stack, List<String> lines, int blockCount) {
+        CompoundTag tag = tag(stack);
+        ListTag list = new ListTag();
+        for (String line : lines) {
+            list.add(StringTag.valueOf(line));
+        }
+        tag.put(ACTIVE_MATERIALS, list);
+        tag.putInt(ACTIVE_BLOCK_COUNT, blockCount);
+        write(stack, tag);
+    }
+
+    /** Clockwise quarter turns (0-3) applied when pasting. */
+    public static int pasteRotation(ItemStack stack) {
+        return tag(stack).getInt(PASTE_ROTATION) & 3;
+    }
+
+    public static void setPasteRotation(ItemStack stack, int quarterTurns) {
+        CompoundTag tag = tag(stack);
+        tag.putInt(PASTE_ROTATION, quarterTurns & 3);
+        write(stack, tag);
+    }
+
+    /** When true, air in the blueprint leaves the existing world blocks alone. */
+    public static boolean pasteSkipAir(ItemStack stack) {
+        return tag(stack).getBoolean(PASTE_SKIP_AIR);
+    }
+
+    public static void setPasteSkipAir(ItemStack stack, boolean skipAir) {
+        CompoundTag tag = tag(stack);
+        tag.putBoolean(PASTE_SKIP_AIR, skipAir);
+        write(stack, tag);
+    }
+
+    /** Footprint of the active blueprint after the paste rotation is applied. */
+    public static Vec3i rotatedActiveStructureSize(ItemStack stack) {
+        Vec3i size = activeStructureSize(stack);
+        return (pasteRotation(stack) & 1) == 0 ? size : new Vec3i(size.getZ(), size.getY(), size.getX());
     }
 
     public static List<String> structureNames(ItemStack stack) {
@@ -242,7 +396,7 @@ public final class ToolData {
         }
     }
 
-    private static void setStructureNames(ItemStack stack, List<String> names) {
+    public static void setStructureNames(ItemStack stack, List<String> names) {
         CompoundTag tag = tag(stack);
         ListTag list = new ListTag();
         for (String name : names) {

@@ -21,7 +21,13 @@ public final class ModCommands {
     public static void register(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("ltwterraformer")
                 .then(Commands.literal("undo").executes(context -> undo(context.getSource())))
-                .then(Commands.literal("cycle").executes(context -> cycleHeldTool(context.getSource())))
+                .then(Commands.literal("cycle").executes(context -> cycleHeldTool(context.getSource(), true)))
+                .then(Commands.literal("cycle_back").executes(context -> cycleHeldTool(context.getSource(), false)))
+                .then(Commands.literal("area")
+                        .then(Commands.literal("clear").executes(context -> clearArea(context.getSource())))
+                        .then(Commands.literal("height")
+                                .then(Commands.argument("extra", IntegerArgumentType.integer(0, ToolData.MAX_AREA_EXTRA_HEIGHT))
+                                        .executes(ModCommands::setAreaHeight))))
                 .then(Commands.literal("mode")
                         .then(Commands.argument("mode", StringArgumentType.word())
                                 .suggests((context, builder) -> {
@@ -45,7 +51,7 @@ public final class ModCommands {
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, TerrainOperations.MAX_RADIUS))
                                 .executes(ModCommands::setRadius)))
                 .then(Commands.literal("adjust_radius")
-                        .then(Commands.argument("amount", IntegerArgumentType.integer(-1, 1))
+                        .then(Commands.argument("amount", IntegerArgumentType.integer(-16, 16))
                                 .executes(ModCommands::adjustRadius)))
                 .then(Commands.literal("restriction")
                         .then(Commands.argument("restriction", StringArgumentType.word())
@@ -71,6 +77,9 @@ public final class ModCommands {
                         .then(Commands.literal("adjust_height")
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(-1, 1))
                                         .executes(ModCommands::adjustStructureHeight)))
+                        .then(Commands.literal("refresh").executes(context -> refreshStructures(context.getSource())))
+                        .then(Commands.literal("rotate").executes(context -> rotateStructure(context.getSource())))
+                        .then(Commands.literal("air").executes(context -> toggleStructureAir(context.getSource())))
                         .then(Commands.literal("clear").executes(context -> clearStructureSelection(context.getSource())))
                         .then(Commands.literal("list").executes(context -> listStructures(context.getSource())))));
     }
@@ -92,20 +101,21 @@ public final class ModCommands {
         return restored;
     }
 
-    private static int cycleHeldTool(CommandSourceStack source) {
+    private static int cycleHeldTool(CommandSourceStack source, boolean forward) {
         ServerPlayer player = player(source);
         if (player == null) {
             return 0;
         }
         ItemStack stack = heldTool(player);
         if (stack.is(ModItems.CREATIVE_TERRAFORMER.get())) {
-            TerraformMode next = ToolData.mode(stack).next();
+            TerraformMode next = forward ? ToolData.mode(stack).next() : ToolData.mode(stack).previous();
             ToolData.setMode(stack, next);
             source.sendSuccess(() -> Component.translatable("message.ltwterraformer.mode", next.displayName()), false);
             return 1;
         }
         if (stack.is(ModItems.SURVIVAL_BUILDER_WAND.get())) {
-            WandRestriction next = ToolData.restriction(stack).next();
+            WandRestriction next = forward
+                    ? ToolData.restriction(stack).next() : ToolData.restriction(stack).previous();
             ToolData.setRestriction(stack, next);
             source.sendSuccess(() -> Component.translatable("message.ltwterraformer.restriction", next.displayName()), false);
             return 1;
@@ -165,16 +175,58 @@ public final class ModCommands {
 
     private static int adjustRadius(CommandContext<CommandSourceStack> context) {
         ServerPlayer player = player(context.getSource());
+        ItemStack held = player == null ? ItemStack.EMPTY : heldTool(player);
+        int amount = IntegerArgumentType.getInteger(context, "amount");
+        if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get()) && ToolData.restriction(held).twoPoint()) {
+            int extra = Math.clamp(ToolData.wandExtraHeight(held) + amount, 0, ToolData.MAX_WAND_EXTRA_HEIGHT);
+            ToolData.setWandExtraHeight(held, extra);
+            context.getSource().sendSuccess(() -> Component.translatable("message.ltwterraformer.extra_height", extra), false);
+            return 1;
+        }
+        ItemStack stack = held.is(ModItems.CREATIVE_TERRAFORMER.get()) ? held : ItemStack.EMPTY;
+        if (stack.isEmpty()) {
+            context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_creative"));
+            return 0;
+        }
+        if (ToolData.shape(stack) == BrushShape.SELECTION) {
+            int extra = Math.clamp(ToolData.areaExtraHeight(stack) + amount, 0, ToolData.MAX_AREA_EXTRA_HEIGHT);
+            ToolData.setAreaExtraHeight(stack, extra);
+            context.getSource().sendSuccess(() -> Component.translatable("message.ltwterraformer.extra_height", extra), false);
+            return 1;
+        }
+        int radius = Math.clamp(ToolData.radius(stack) + amount, 1, TerrainOperations.MAX_RADIUS);
+        ToolData.setRadius(stack, radius);
+        context.getSource().sendSuccess(() -> Component.translatable("message.ltwterraformer.radius", radius), false);
+        return radius;
+    }
+
+    private static int clearArea(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack held = player == null ? ItemStack.EMPTY : heldTool(player);
+        if (held.is(ModItems.CREATIVE_TERRAFORMER.get())) {
+            ToolData.clearArea(held);
+        } else if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get())) {
+            ToolData.clearWandCorner(held);
+            ToolData.setWandExtraHeight(held, 0);
+        } else {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_tool"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable("message.ltwterraformer.area_cleared"), false);
+        return 1;
+    }
+
+    private static int setAreaHeight(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = player(context.getSource());
         ItemStack stack = player == null ? ItemStack.EMPTY : creativeTool(player);
         if (stack.isEmpty()) {
             context.getSource().sendFailure(Component.translatable("command.ltwterraformer.hold_creative"));
             return 0;
         }
-        int amount = IntegerArgumentType.getInteger(context, "amount");
-        int radius = Math.clamp(ToolData.radius(stack) + amount, 1, TerrainOperations.MAX_RADIUS);
-        ToolData.setRadius(stack, radius);
-        context.getSource().sendSuccess(() -> Component.translatable("message.ltwterraformer.radius", radius), false);
-        return radius;
+        int extra = IntegerArgumentType.getInteger(context, "extra");
+        ToolData.setAreaExtraHeight(stack, extra);
+        context.getSource().sendSuccess(() -> Component.translatable("message.ltwterraformer.extra_height", extra), false);
+        return 1;
     }
 
     private static int setRestriction(CommandContext<CommandSourceStack> context) {
@@ -244,6 +296,43 @@ public final class ModCommands {
         }
         context.getSource().sendSuccess(() -> Component.translatable(
                 "message.ltwterraformer.structure_ceiling", ceiling.getAsInt(), height), false);
+        return 1;
+    }
+
+    private static int refreshStructures(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        return StructureLibrary.refreshNames(player, stack);
+    }
+
+    private static int rotateStructure(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        int rotation = (ToolData.pasteRotation(stack) + 1) & 3;
+        ToolData.setPasteRotation(stack, rotation);
+        source.sendSuccess(() -> Component.translatable("message.ltwterraformer.structure_rotation", rotation * 90), false);
+        return 1;
+    }
+
+    private static int toggleStructureAir(CommandSourceStack source) {
+        ServerPlayer player = player(source);
+        ItemStack stack = player == null ? ItemStack.EMPTY : structureEditor(player);
+        if (stack.isEmpty()) {
+            source.sendFailure(Component.translatable("command.ltwterraformer.hold_structure_editor"));
+            return 0;
+        }
+        boolean skipAir = !ToolData.pasteSkipAir(stack);
+        ToolData.setPasteSkipAir(stack, skipAir);
+        source.sendSuccess(() -> Component.translatable(skipAir
+                ? "message.ltwterraformer.structure_air_keep" : "message.ltwterraformer.structure_air_replace"), false);
         return 1;
     }
 

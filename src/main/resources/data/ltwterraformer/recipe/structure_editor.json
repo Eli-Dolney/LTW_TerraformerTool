@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "  D",
+    " B ",
+    "S  "
+  ],
+  "key": {
+    "D": { "item": "minecraft:diamond" },
+    "B": { "item": "minecraft:book" },
+    "S": { "item": "minecraft:stick" }
+  },
+  "result": {
+    "id": "ltwterraformer:structure_editor",
+    "count": 1
+  }
+}

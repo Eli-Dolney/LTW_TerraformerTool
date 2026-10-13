@@ -13,13 +13,15 @@ import java.util.List;
 import java.util.Set;
 
 final class WandPlacementPlanner {
-    static final int MAX_BLOCKS = 64;
-    static final int MAX_SCANNED_BLOCKS = 4096;
+    static final int MAX_BLOCKS = 256;
+    static final int MAX_SCANNED_BLOCKS = 16384;
     static final int MAX_PROJECTED_BLOCKS = 16;
     static final int HOLE_FILL_RADIUS = 8;
     static final int HOLE_FILL_DEPTH = 16;
     static final int MAX_HOLE_FILL_BLOCKS = 2304;
     static final int MAX_PREVIEW_BLOCKS = 512;
+    static final int MAX_BOX_SPAN = 64;
+    static final int MAX_BOX_BLOCKS = 4096;
 
     private WandPlacementPlanner() {
     }
@@ -28,6 +30,10 @@ final class WandPlacementPlanner {
                                Direction playerDirection) {
         if (restriction == WandRestriction.HOLE_FILL) {
             return planHoleFill(level, origin);
+        }
+        if (restriction.twoPoint()) {
+            // Two-corner patterns are planned with planBox once both corners are known.
+            return List.of();
         }
         if (restriction == WandRestriction.LINE || restriction == WandRestriction.STAIR_UP
                 || restriction == WandRestriction.STAIR_DOWN) {
@@ -57,6 +63,41 @@ final class WandPlacementPlanner {
                 BlockPos next = support.relative(direction);
                 if (!visited.contains(next)) {
                     queue.addLast(next);
+                }
+            }
+        }
+        return List.copyOf(targets);
+    }
+
+    /**
+     * Plans a two-corner build: every open position in the box between the corners, or only its four outer walls.
+     * Positions are ordered bottom-up so each layer is supported by the one before it.
+     */
+    static List<BlockPos> planBox(Level level, BlockPos first, BlockPos second, int extraHeight, boolean wallsOnly) {
+        int minX = Math.min(first.getX(), second.getX());
+        int minY = Math.min(first.getY(), second.getY());
+        int minZ = Math.min(first.getZ(), second.getZ());
+        int maxX = Math.max(first.getX(), second.getX());
+        int maxY = Math.max(first.getY(), second.getY()) + Math.max(0, extraHeight);
+        int maxZ = Math.max(first.getZ(), second.getZ());
+        List<BlockPos> targets = new ArrayList<>();
+        if (maxX - minX >= MAX_BOX_SPAN || maxY - minY >= MAX_BOX_SPAN * 2 || maxZ - minZ >= MAX_BOX_SPAN) {
+            return List.of();
+        }
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (wallsOnly && x != minX && x != maxX && z != minZ && z != maxZ) {
+                        continue;
+                    }
+                    BlockPos target = new BlockPos(x, y, z);
+                    BlockState old = level.getBlockState(target);
+                    if (level.getBlockEntity(target) == null && (old.isAir() || old.canBeReplaced())) {
+                        targets.add(target);
+                        if (targets.size() >= MAX_BOX_BLOCKS) {
+                            return List.copyOf(targets);
+                        }
+                    }
                 }
             }
         }

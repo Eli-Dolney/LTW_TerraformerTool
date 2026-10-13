@@ -7,9 +7,9 @@ Use a copy of your world for the first test. Automated tests cover operations an
 1. Exit Minecraft and CurseForge.
 2. Back up the target world.
 3. Remove every older `ltwterraformer-*.jar` from the profile's `mods` folder.
-4. Copy `build/libs/ltwterraformer-0.3.0.jar` into that folder.
+4. Copy `build/libs/ltwterraformer-0.6.0.jar` into that folder.
 5. Launch the **Minecolonies Custom** profile (Minecraft 1.21.1, NeoForge 21.1.235).
-6. Confirm **LTW Terraformer Tool 0.3.0** appears on the Mods screen.
+6. Confirm **LTW Terraformer Tool 0.6.0** appears on the Mods screen.
 
 For a dedicated server, install the same JAR on the server and every connecting client.
 
@@ -41,6 +41,27 @@ Use a disposable area, put dirt in the offhand, and start at radius 1 or 2.
 
 If right-click does nothing, verify creative mode and read the yellow action-bar explanation.
 
+## Large-area and sculpting scenarios (0.5.0)
+
+1. Press `B` until the shape is **Selection**. Click two corners roughly 100 blocks apart; confirm the HUD shows the size and the box preview appears.
+2. In **Flatten**, click a block at the height you want and confirm the whole area levels. If the action bar says the limit was reached, click again.
+3. Press `Z` twice in a row after two edits and confirm both are undone in order.
+4. Try **Hill**, **Valley**, and **Roughen** with a radius of 8–12, then **Smooth** over the result.
+5. Select two corners at different heights and use **Grade**; confirm an even slope.
+6. Press `]` a few times and use **Walls**, then **Fill**; confirm `X` clears the selection.
+7. Watch server tick time during a full 128×128 Flatten and report long freezes.
+
+## Blueprint scenarios (0.6.0)
+
+1. Copy a small build, press `G`, save it, and confirm it appears in the Blueprint Book with a material list.
+2. Press **Open Blueprint Folder** and confirm the `.nbt` file is there. Open a different world and confirm the blueprint is listed and pastes.
+3. Press `R` four times in Paste mode; confirm the preview turns and stairs, doors, and chests face the right way after each paste.
+4. Paste over uneven terrain with **Air: Keep**, then with **Air: Clear**, and compare.
+5. Copy and paste the largest build you have and report any long freeze.
+6. Load a preset saved by an older version and confirm it still pastes.
+7. In survival, load a blueprint without the materials and confirm nothing is placed and the missing blocks are listed. Then carry the materials, paste, and confirm the right counts are consumed.
+8. Save a structure with a vanilla structure block, copy its file into the blueprint folder, and confirm it loads.
+
 ## Survival Builder Wand scenarios
 
 1. Enter survival mode and give yourself the wand plus building material.
@@ -52,7 +73,8 @@ If right-click does nothing, verify creative mode and read the yellow action-bar
 7. Confirm the crater fills to the clicked block's height and consumes offhand dirt before matching inventory stacks.
 8. Test a crater larger than the available dirt and confirm placement stops cleanly when material runs out.
 9. Press `Z` and confirm blocks are removed but items are not refunded.
-10. Test inside an allowed and denied MineColonies claim and report unexpected protection behavior.
+10. Select **Box Fill**, click two corners, and confirm the box fills and consumes one item per block. Repeat with **Walls** after pressing `]` three times.
+11. Test inside an allowed and denied MineColonies claim and report unexpected protection behavior.
 
 ## Report useful results
 

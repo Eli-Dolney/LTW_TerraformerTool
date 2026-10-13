@@ -10,7 +10,12 @@ public enum TerraformMode {
     RAISE("raise"),
     LOWER("lower"),
     PAINT("paint"),
-    REPLACE("replace");
+    REPLACE("replace"),
+    HILL("hill"),
+    VALLEY("valley"),
+    ROUGHEN("roughen"),
+    GRADE("grade"),
+    WALLS("walls");
 
     private final String id;
 
@@ -29,6 +34,21 @@ public enum TerraformMode {
     public TerraformMode next() {
         TerraformMode[] modes = values();
         return modes[(ordinal() + 1) % modes.length];
+    }
+
+    public TerraformMode previous() {
+        TerraformMode[] modes = values();
+        return modes[(ordinal() + modes.length - 1) % modes.length];
+    }
+
+    /** Modes that only make sense on a two-corner selection. */
+    public boolean needsSelection() {
+        return this == GRADE || this == WALLS;
+    }
+
+    /** Modes that edit a 3D volume rather than the terrain surface. */
+    public boolean editsVolume() {
+        return this == FILL || this == CLEAR || this == REPLACE || this == WALLS;
     }
 
     public static TerraformMode fromId(String id) {

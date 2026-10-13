@@ -10,26 +10,46 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class UndoManager {
-    private static final Map<UUID, Operation> LAST_OPERATION = new ConcurrentHashMap<>();
+    public static final int MAX_HISTORY = 10;
+    private static final int MAX_STORED_CHANGES = 1_500_000;
+    private static final Map<UUID, Deque<Operation>> HISTORY = new ConcurrentHashMap<>();
 
     private UndoManager() {
     }
 
     public static void remember(ServerPlayer player, ServerLevel level, List<Change> changes) {
-        LAST_OPERATION.put(player.getUUID(), new Operation(level.dimension(), List.copyOf(changes)));
+        Deque<Operation> history = HISTORY.computeIfAbsent(player.getUUID(), id -> new ArrayDeque<>());
+        history.addLast(new Operation(level.dimension(), List.copyOf(changes)));
+        long stored = 0;
+        for (Operation operation : history) {
+            stored += operation.changes().size();
+        }
+        while (history.size() > 1 && (history.size() > MAX_HISTORY || stored > MAX_STORED_CHANGES)) {
+            stored -= history.removeFirst().changes().size();
+        }
+    }
+
+    /** Number of operations the player can still undo. */
+    public static int depth(ServerPlayer player) {
+        Deque<Operation> history = HISTORY.get(player.getUUID());
+        return history == null ? 0 : history.size();
     }
 
     public static int undo(ServerPlayer player) {
-        Operation operation = LAST_OPERATION.remove(player.getUUID());
+        Deque<Operation> history = HISTORY.get(player.getUUID());
+        Operation operation = history == null ? null : history.peekLast();
         if (operation == null || !operation.dimension().equals(player.level().dimension())) {
             return 0;
         }
+        history.removeLast();
         ServerLevel level = player.serverLevel();
         int restored = 0;
         List<Change> changes = operation.changes();

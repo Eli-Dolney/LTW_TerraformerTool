@@ -9,7 +9,9 @@ public enum WandRestriction {
     LINE("line"),
     STAIR_UP("stair_up"),
     STAIR_DOWN("stair_down"),
-    HOLE_FILL("hole_fill");
+    HOLE_FILL("hole_fill"),
+    BOX("box"),
+    WALLS("walls");
 
     private final String id;
 
@@ -28,6 +30,16 @@ public enum WandRestriction {
     public WandRestriction next() {
         WandRestriction[] restrictions = values();
         return restrictions[(ordinal() + 1) % restrictions.length];
+    }
+
+    public WandRestriction previous() {
+        WandRestriction[] restrictions = values();
+        return restrictions[(ordinal() + restrictions.length - 1) % restrictions.length];
+    }
+
+    /** Patterns built from two clicked corners instead of a single click. */
+    public boolean twoPoint() {
+        return this == BOX || this == WALLS;
     }
 
     public static WandRestriction fromId(String id) {

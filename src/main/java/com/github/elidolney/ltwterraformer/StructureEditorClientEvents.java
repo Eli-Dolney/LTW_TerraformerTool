@@ -29,6 +29,8 @@ public final class StructureEditorClientEvents {
     private static final String KEY_CATEGORY = "key.categories.ltwterraformer";
     private static final KeyMapping LIBRARY = new KeyMapping("key.ltwterraformer.structure_library",
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, KEY_CATEGORY);
+    private static final KeyMapping ROTATE = new KeyMapping("key.ltwterraformer.structure_rotate",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, KEY_CATEGORY);
     private static final int HUD_BACKGROUND = 0xB0181C20;
 
     private StructureEditorClientEvents() {
@@ -43,6 +45,7 @@ public final class StructureEditorClientEvents {
         @SubscribeEvent
         public static void registerKeys(RegisterKeyMappingsEvent event) {
             event.register(LIBRARY);
+            event.register(ROTATE);
         }
     }
 
@@ -53,10 +56,17 @@ public final class StructureEditorClientEvents {
             return;
         }
         ItemStack editor = heldEditor(minecraft);
-        if (editor.isEmpty() || !LIBRARY.consumeClick()) {
+        if (editor.isEmpty() || minecraft.player.connection == null) {
             return;
         }
-        minecraft.setScreen(new StructurePresetScreen());
+        if (ROTATE.consumeClick()) {
+            minecraft.player.connection.sendCommand("ltwterraformer structure rotate");
+        }
+        if (LIBRARY.consumeClick()) {
+            // Ask the server to rescan the blueprint folder so files dropped in by hand appear in the list.
+            minecraft.player.connection.sendCommand("ltwterraformer structure refresh");
+            minecraft.setScreen(new StructurePresetScreen());
+        }
     }
 
     @SubscribeEvent
@@ -72,7 +82,7 @@ public final class StructureEditorClientEvents {
         BlockPos max;
         if (ToolData.editorMode(stack) == StructureEditorMode.PASTE) {
             BlockPos origin = hit.getBlockPos().relative(hit.getDirection());
-            var size = ToolData.activeStructureSize(stack);
+            var size = ToolData.rotatedActiveStructureSize(stack);
             if (size.getX() == 0 || size.getY() == 0 || size.getZ() == 0) {
                 return;
             }
@@ -132,7 +142,8 @@ public final class StructureEditorClientEvents {
         Component hint;
         if (ToolData.editorMode(stack) == StructureEditorMode.PASTE) {
             hint = Component.translatable("hud.ltwterraformer.structure_editor_paste",
-                    LIBRARY.getTranslatedKeyMessage());
+                    LIBRARY.getTranslatedKeyMessage(), ROTATE.getTranslatedKeyMessage(),
+                    ToolData.pasteRotation(stack) * 90);
         } else if (ToolData.cornerTwo(stack).isPresent()) {
             hint = Component.translatable("hud.ltwterraformer.structure_editor_ready",
                     LIBRARY.getTranslatedKeyMessage());

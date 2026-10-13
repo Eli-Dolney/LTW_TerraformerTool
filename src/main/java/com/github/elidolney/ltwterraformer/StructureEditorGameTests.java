@@ -119,6 +119,60 @@ public final class StructureEditorGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void rotatesBlueprintsAndChargesSurvivalMaterials(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ServerPlayer player = headlessPlayer(level);
+        player.getAbilities().instabuild = true;
+        player.getAbilities().mayBuild = true;
+        ItemStack editor = new ItemStack(ModItems.STRUCTURE_EDITOR.get());
+
+        BlockPos source = helper.absolutePos(new BlockPos(2, 30, 2));
+        level.setBlock(source, Blocks.OAK_LOG.defaultBlockState(), 3);
+        level.setBlock(source.east(), Blocks.COBBLESTONE.defaultBlockState(), 3);
+        ToolData.setCornerOne(editor, source, level.dimension().location().toString());
+        ToolData.setCornerTwo(editor, source.east());
+        helper.assertTrue(StructureLibrary.captureClipboard(player, editor), "Two-block build was not copied");
+        helper.assertTrue(ToolData.activeBlockCount(editor) == 2, "Blueprint should count two blocks");
+        helper.assertTrue(ToolData.activeMaterials(editor).contains("minecraft:oak_log=1")
+                && ToolData.activeMaterials(editor).contains("minecraft:cobblestone=1"),
+                "Material list was wrong: " + ToolData.activeMaterials(editor));
+
+        // A quarter turn swings the east-pointing row round to point south.
+        ToolData.setPasteRotation(editor, 1);
+        helper.assertTrue(ToolData.rotatedActiveStructureSize(editor).getZ() == 2, "Rotated preview size was not swapped");
+        BlockPos turned = helper.absolutePos(new BlockPos(8, 30, 2));
+        helper.assertTrue(StructureLibrary.paste(player, editor, turned) == 2, "Rotated paste should place two blocks");
+        helper.assertTrue(level.getBlockState(turned).is(Blocks.OAK_LOG), "Rotated paste moved the log");
+        helper.assertTrue(level.getBlockState(turned.south()).is(Blocks.COBBLESTONE), "Rotated paste did not turn the row");
+        helper.assertTrue(UndoManager.undo(player) == 2, "Rotated paste was not undoable");
+        ToolData.setPasteRotation(editor, 0);
+
+        // Shared blueprint folder: saved blueprints are found again by a rescan.
+        helper.assertTrue(StructureLibrary.savePreset(player, editor, "ltw_test_row"), "Blueprint was not saved");
+        ToolData.setStructureNames(editor, java.util.List.of());
+        StructureLibrary.refreshNames(player, editor);
+        helper.assertTrue(ToolData.structureNames(editor).contains("ltw_test_row"), "Rescan did not find the blueprint");
+
+        // Survival pays for what it places and refuses when short.
+        player.getAbilities().instabuild = false;
+        BlockPos paid = helper.absolutePos(new BlockPos(12, 30, 2));
+        helper.assertTrue(StructureLibrary.paste(player, editor, paid) == 0, "Survival paste must fail without materials");
+        helper.assertTrue(level.getBlockState(paid).isAir(), "A refused paste must not place anything");
+        ItemStack logs = new ItemStack(Blocks.OAK_LOG, 3);
+        ItemStack cobble = new ItemStack(Blocks.COBBLESTONE, 1);
+        player.getInventory().setItem(0, logs);
+        player.getInventory().setItem(1, cobble);
+        helper.assertTrue(StructureLibrary.paste(player, editor, paid) == 2, "Survival paste should place two blocks");
+        helper.assertTrue(logs.getCount() == 2 && cobble.isEmpty(), "Survival paste did not consume one of each block");
+        helper.assertTrue(level.getBlockState(paid.east()).is(Blocks.COBBLESTONE), "Survival paste missed a block");
+        UndoManager.undo(player);
+
+        player.getAbilities().instabuild = true;
+        helper.assertTrue(StructureLibrary.deletePreset(player, editor, "ltw_test_row"), "Test blueprint was not deleted");
+        helper.succeed();
+    }
+
     private static ServerPlayer headlessPlayer(ServerLevel level) {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(
                 new GameProfile(UUID.randomUUID(), "ltw-structure-test"), false);

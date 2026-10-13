@@ -24,12 +24,6 @@ public final class StructureEditorItem extends Item {
         if (player == null) {
             return InteractionResult.PASS;
         }
-        if (!player.getAbilities().instabuild) {
-            player.displayClientMessage(Component.translatable("message.ltwterraformer.structure_creative_only")
-                    .withStyle(ChatFormatting.RED), true);
-            return InteractionResult.FAIL;
-        }
-
         ItemStack stack = context.getItemInHand();
         if (player.isShiftKeyDown()) {
             if (!context.getLevel().isClientSide()) {
@@ -86,5 +80,6 @@ public final class StructureEditorItem extends Item {
         }
         tooltip.add(Component.translatable("tooltip.ltwterraformer.structure_editor.2").withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.translatable("tooltip.ltwterraformer.structure_editor.3").withStyle(ChatFormatting.DARK_AQUA));
+        tooltip.add(Component.translatable("tooltip.ltwterraformer.structure_editor.4").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

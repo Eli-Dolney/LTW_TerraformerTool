@@ -39,6 +39,9 @@ public final class LTWTerraformerClient {
     private static final KeyMapping RADIUS_DOWN = key("key.ltwterraformer.radius_down", GLFW.GLFW_KEY_LEFT_BRACKET);
     private static final KeyMapping RADIUS_UP = key("key.ltwterraformer.radius_up", GLFW.GLFW_KEY_RIGHT_BRACKET);
     private static final KeyMapping UNDO = key("key.ltwterraformer.undo", GLFW.GLFW_KEY_Z);
+    private static final KeyMapping CLEAR_AREA = key("key.ltwterraformer.clear_area", GLFW.GLFW_KEY_X);
+    /** Radius or height change per key press while sneaking. */
+    private static final int FAST_STEP = 5;
 
     private static final int HUD_BACKGROUND = 0xB0181C20;
     private static final int HUD_PRIMARY = 0xFFF4F8FA;
@@ -58,6 +61,7 @@ public final class LTWTerraformerClient {
         event.register(RADIUS_DOWN);
         event.register(RADIUS_UP);
         event.register(UNDO);
+        event.register(CLEAR_AREA);
     }
 
     private void clientTick(ClientTickEvent.Post event) {
@@ -86,19 +90,25 @@ public final class LTWTerraformerClient {
         if (held.isEmpty()) {
             return;
         }
+        boolean sneaking = minecraft.player.isShiftKeyDown();
+        int step = sneaking ? FAST_STEP : 1;
         if (CYCLE_MODE.consumeClick()) {
-            minecraft.player.connection.sendCommand("ltwterraformer cycle");
+            minecraft.player.connection.sendCommand(sneaking ? "ltwterraformer cycle_back" : "ltwterraformer cycle");
         }
-        if (held.is(ModItems.CREATIVE_TERRAFORMER.get())) {
-            if (CYCLE_SHAPE.consumeClick()) {
-                minecraft.player.connection.sendCommand("ltwterraformer shape next");
-            }
+        boolean terraformer = held.is(ModItems.CREATIVE_TERRAFORMER.get());
+        if (terraformer && CYCLE_SHAPE.consumeClick()) {
+            minecraft.player.connection.sendCommand("ltwterraformer shape next");
+        }
+        if (terraformer || ToolData.restriction(held).twoPoint()) {
             if (RADIUS_DOWN.consumeClick()) {
-                minecraft.player.connection.sendCommand("ltwterraformer adjust_radius -1");
+                minecraft.player.connection.sendCommand("ltwterraformer adjust_radius -" + step);
             }
             if (RADIUS_UP.consumeClick()) {
-                minecraft.player.connection.sendCommand("ltwterraformer adjust_radius 1");
+                minecraft.player.connection.sendCommand("ltwterraformer adjust_radius " + step);
             }
+        }
+        if (CLEAR_AREA.consumeClick()) {
+            minecraft.player.connection.sendCommand("ltwterraformer area clear");
         }
         if (UNDO.consumeClick()) {
             minecraft.player.connection.sendCommand("ltwterraformer undo");
@@ -122,7 +132,18 @@ public final class LTWTerraformerClient {
         Vec3 camera = event.getCamera().getPosition();
 
         if (held.is(ModItems.CREATIVE_TERRAFORMER.get())) {
-            renderBrushPreview(poseStack, lines, camera, hit, ToolData.mode(held), ToolData.radius(held), ToolData.shape(held));
+            if (ToolData.shape(held) == BrushShape.SELECTION) {
+                renderSelectionPreview(poseStack, lines, camera, hit, held, minecraft.level.dimension().location().toString());
+            } else {
+                renderBrushPreview(poseStack, lines, camera, hit, ToolData.mode(held), ToolData.radius(held), ToolData.shape(held));
+            }
+        } else if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get()) && ToolData.restriction(held).twoPoint()) {
+            BlockPos point = hit.getBlockPos().relative(hit.getDirection());
+            BlockPos first = ToolData.wandCorner(held)
+                    .filter(corner -> minecraft.level.dimension().location().toString().equals(ToolData.wandCornerDimension(held)))
+                    .orElse(point);
+            drawBox(poseStack, lines, camera, first, point, ToolData.wandExtraHeight(held),
+                    new float[]{0.25F, 0.85F, 1.0F, 0.95F});
         } else if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get())) {
             List<BlockPos> targets = WandPlacementPlanner.plan(
                     minecraft.level,
@@ -154,6 +175,15 @@ public final class LTWTerraformerClient {
         double visualRadius = radius + 0.5;
         float[] color = modeColor(mode);
 
+        if (!volumeMode && mode != TerraformMode.REPLACE && shape == BrushShape.CUBE) {
+            // Surface modes follow the brush footprint: Cube means a square patch of ground.
+            AABB square = new AABB(
+                    centerBlock.getX() - radius, centerBlock.getY() + 1.01, centerBlock.getZ() - radius,
+                    centerBlock.getX() + radius + 1, centerBlock.getY() + 1.02, centerBlock.getZ() + radius + 1
+            ).move(-camera.x, -camera.y, -camera.z);
+            LevelRenderer.renderLineBox(poseStack, lines, square, color[0], color[1], color[2], color[3]);
+            return;
+        }
         if (!volumeMode && mode != TerraformMode.REPLACE) {
             drawCircle(poseStack, lines, camera, cx, centerBlock.getY() + 1.01, cz, visualRadius,
                     Direction.Axis.Y, color);
@@ -178,7 +208,33 @@ public final class LTWTerraformerClient {
                 LevelRenderer.renderLineBox(poseStack, lines, box, color[0], color[1], color[2], color[3]);
             }
             case CYLINDER -> drawCylinder(poseStack, lines, camera, cx, cy, cz, visualRadius, color);
+            case SELECTION -> {
+            }
         }
+    }
+
+    private void renderSelectionPreview(PoseStack poseStack, VertexConsumer lines, Vec3 camera, BlockHitResult hit,
+                                        ItemStack held, String dimension) {
+        float[] color = modeColor(ToolData.mode(held));
+        BlockPos target = hit.getBlockPos();
+        java.util.Optional<BlockPos> first = ToolData.areaOne(held);
+        if (first.isEmpty() || !dimension.equals(ToolData.areaDimension(held))) {
+            drawBox(poseStack, lines, camera, target, target, 0, color);
+            return;
+        }
+        BlockPos second = ToolData.areaTwo(held).orElse(target);
+        drawBox(poseStack, lines, camera, first.get(), second, ToolData.areaExtraHeight(held), color);
+    }
+
+    private static void drawBox(PoseStack poseStack, VertexConsumer lines, Vec3 camera, BlockPos first, BlockPos second,
+                                int extraHeight, float[] color) {
+        AABB box = new AABB(
+                Math.min(first.getX(), second.getX()), Math.min(first.getY(), second.getY()),
+                Math.min(first.getZ(), second.getZ()),
+                Math.max(first.getX(), second.getX()) + 1, Math.max(first.getY(), second.getY()) + 1 + extraHeight,
+                Math.max(first.getZ(), second.getZ()) + 1
+        ).inflate(0.003).move(-camera.x, -camera.y, -camera.z);
+        LevelRenderer.renderLineBox(poseStack, lines, box, color[0], color[1], color[2], color[3]);
     }
 
     private void renderHud(RenderGuiEvent.Post event) {
@@ -190,12 +246,38 @@ public final class LTWTerraformerClient {
         ItemStack held = heldTool(minecraft);
         Component title;
         Component hint;
-        if (held.is(ModItems.CREATIVE_TERRAFORMER.get())) {
+        if (held.is(ModItems.CREATIVE_TERRAFORMER.get()) && ToolData.shape(held) == BrushShape.SELECTION) {
+            java.util.Optional<BlockPos> first = ToolData.areaOne(held);
+            java.util.Optional<BlockPos> second = ToolData.areaTwo(held);
+            if (first.isPresent() && second.isPresent()) {
+                title = Component.translatable("hud.ltwterraformer.terraformer_area", ToolData.mode(held).displayName(),
+                        Math.abs(first.get().getX() - second.get().getX()) + 1,
+                        Math.abs(first.get().getY() - second.get().getY()) + 1 + ToolData.areaExtraHeight(held),
+                        Math.abs(first.get().getZ() - second.get().getZ()) + 1);
+                hint = Component.translatable("hud.ltwterraformer.terraformer_area_hint",
+                        CYCLE_MODE.getTranslatedKeyMessage(), RADIUS_DOWN.getTranslatedKeyMessage(),
+                        RADIUS_UP.getTranslatedKeyMessage(), CLEAR_AREA.getTranslatedKeyMessage(),
+                        UNDO.getTranslatedKeyMessage());
+            } else {
+                title = Component.translatable("hud.ltwterraformer.terraformer_selecting",
+                        ToolData.mode(held).displayName());
+                hint = Component.translatable(first.isEmpty()
+                        ? "hud.ltwterraformer.terraformer_area_point_one"
+                        : "hud.ltwterraformer.terraformer_area_point_two");
+            }
+        } else if (held.is(ModItems.CREATIVE_TERRAFORMER.get())) {
             title = Component.translatable("hud.ltwterraformer.terraformer",
                     ToolData.mode(held).displayName(), ToolData.shape(held).displayName(), ToolData.radius(held));
             hint = Component.translatable("hud.ltwterraformer.terraformer_hint",
                     CYCLE_MODE.getTranslatedKeyMessage(), CYCLE_SHAPE.getTranslatedKeyMessage(),
                     RADIUS_DOWN.getTranslatedKeyMessage(), RADIUS_UP.getTranslatedKeyMessage(), UNDO.getTranslatedKeyMessage());
+        } else if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get()) && ToolData.restriction(held).twoPoint()) {
+            title = Component.translatable("hud.ltwterraformer.wand_box", ToolData.restriction(held).displayName(),
+                    ToolData.wandExtraHeight(held));
+            hint = Component.translatable(ToolData.wandCorner(held).isEmpty()
+                            ? "hud.ltwterraformer.wand_box_point_one" : "hud.ltwterraformer.wand_box_point_two",
+                    RADIUS_DOWN.getTranslatedKeyMessage(), RADIUS_UP.getTranslatedKeyMessage(),
+                    CLEAR_AREA.getTranslatedKeyMessage());
         } else if (held.is(ModItems.SURVIVAL_BUILDER_WAND.get())) {
             title = Component.translatable("hud.ltwterraformer.wand", ToolData.restriction(held).displayName());
             hint = Component.translatable("hud.ltwterraformer.wand_hint",
@@ -239,6 +321,11 @@ public final class LTWTerraformerClient {
             case LOWER -> new float[]{1.0F, 0.45F, 0.15F, 0.95F};
             case PAINT -> new float[]{0.7F, 0.35F, 1.0F, 0.95F};
             case REPLACE -> new float[]{1.0F, 0.25F, 0.8F, 0.95F};
+            case HILL -> new float[]{0.4F, 0.9F, 0.35F, 0.95F};
+            case VALLEY -> new float[]{0.95F, 0.6F, 0.3F, 0.95F};
+            case ROUGHEN -> new float[]{0.85F, 0.85F, 0.45F, 0.95F};
+            case GRADE -> new float[]{0.3F, 0.7F, 1.0F, 0.95F};
+            case WALLS -> new float[]{0.9F, 0.9F, 0.95F, 0.95F};
         };
     }
 

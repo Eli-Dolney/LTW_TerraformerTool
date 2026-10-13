@@ -5,7 +5,8 @@ import net.minecraft.network.chat.Component;
 public enum BrushShape {
     SPHERE("sphere"),
     CUBE("cube"),
-    CYLINDER("cylinder");
+    CYLINDER("cylinder"),
+    SELECTION("selection");
 
     private final String id;
 
